@@ -147,6 +147,21 @@ def show_stock_examples(exchange):
     for symbol, company in examples.items():
         st.markdown(f"**{symbol}** - {company}")
 
+# In app.py, update the main function:
+
+def validate_symbol(symbol, exchange):
+    """Validate trading symbol"""
+    symbol = symbol.strip().upper()
+    
+    if exchange == "India (NSE)":
+        if not symbol.endswith('.NS'):
+            symbol = f"{symbol}.NS"
+    else:
+        # Remove any NS suffix for US stocks
+        symbol = symbol.replace('.NS', '')
+    
+    return symbol
+
 def main():
     try:
         st.title("🚀 Advanced Trade Risk Analytics Platform")
@@ -161,12 +176,13 @@ def main():
             analysis_period = st.selectbox(
                 "Analysis Period",
                 ["1d", "5d", "1mo", "3mo"],
-                index=1
+                index=1,
+                help="Select the period for analysis"
             )
             
             show_technical = st.checkbox("Show Technical Indicators", value=True)
             show_predictions = st.checkbox("Show Price Predictions", value=True)
-            
+        
         # Main content
         col1, col2 = st.columns([2, 1])
         
@@ -177,88 +193,77 @@ def main():
                 index=0
             )
             
+            default_symbol = "AAPL" if exchange == "US" else "TCS"
             symbol = st.text_input(
                 "Stock Symbol", 
-                "AAPL" if exchange == "US" else "TCS"
-            ).upper()
+                default_symbol,
+                help="Enter the stock symbol (e.g., AAPL for Apple Inc.)"
+            )
             
-            if exchange == "India (NSE)" and not symbol.endswith('.NS'):
-                symbol = f"{symbol}.NS"
-                
+            # Validate and format symbol
+            symbol = validate_symbol(symbol, exchange)
+            
             trade_size = st.number_input(
                 "Trade Size (shares)", 
                 min_value=1, 
-                value=100
+                value=100,
+                help="Enter the number of shares to trade"
             )
+            
+            st.caption(f"Using symbol: {symbol}")
         
         with col2:
             show_stock_examples(exchange)
         
         if st.button("Analyze Risk", type="primary"):
             try:
-                with st.spinner("Performing comprehensive risk analysis..."):
+                with st.spinner(f"Analyzing {symbol}..."):
                     # Fetch and process data
-                    market_data = model.fetch_market_data(symbol, period=analysis_period)
+                    market_data = model.fetch_market_data(
+                        symbol=symbol,
+                        period=analysis_period
+                    )
                     
-                    if market_data.empty:
-                        st.error(f"No data available for {symbol}")
+                    if market_data is None or market_data.empty:
+                        st.error(f"No data available for {symbol}. Please verify the symbol.")
                         return
                     
-                    # Calculate risk metrics
-                    risk_metrics = model.calculate_risk_metrics(market_data, trade_size)
-                    recommendations = model.get_trade_recommendations(risk_metrics, trade_size)
-                    optimal_time = model.get_optimal_execution_time(market_data)
+                    # Rest of your analysis code...
                     
-                    # Display results in tabs
-                    tab1, tab2, tab3 = st.tabs(["Risk Analysis", "Market Data", "Recommendations"])
-                    
-                    with tab1:
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            st.plotly_chart(create_gauge_chart(risk_metrics['total_risk']), use_container_width=True)
-                        with col2:
-                            st.plotly_chart(create_risk_breakdown(risk_metrics), use_container_width=True)
-                    
-                    with tab2:
-                        if show_technical:
-                            st.plotly_chart(plot_price_history(market_data), use_container_width=True)
-                        
-                        # Market metrics
-                        latest_data = market_data.iloc[-1]
-                        metrics_col1, metrics_col2, metrics_col3 = st.columns(3)
-                        
-                        with metrics_col1:
-                            st.metric("Current Price", f"${latest_data['Close']:.2f}")
-                            st.metric("Volume", f"{latest_data['Volume']:,}")
-                        
-                        with metrics_col2:
-                            st.metric("Volatility", f"{latest_data['Volatility']:.2%}")
-                            st.metric("RSI", f"{latest_data['RSI']:.1f}")
-                        
-                        with metrics_col3:
-                            st.metric("Spread", f"${latest_data['Spread']:.2f}")
-                            st.metric("Volume Trend", f"{(latest_data['Volume']/latest_data['Volume_MA']-1):.1%}")
-                    
-                    with tab3:
-                        st.subheader("Trading Recommendations")
-                        st.markdown(f"""
-                        - **Risk Level:** {recommendations['risk_level']}
-                        - **Recommended Action:** {recommendations['action']}
-                        - **Suggested Position Size:** {recommendations['suggested_size']:,} shares
-                        - **Optimal Execution Time:** {optimal_time}
-                        - **Confidence Score:** {recommendations['confidence']:.1%}
-                        """)
-                        
-                        if recommendations['risk_level'] in ['High', 'Medium-High']:
-                            st.warning("⚠️ High risk detected. Consider reducing position size or waiting for better conditions.")
-                
             except Exception as e:
-                st.error(f"Error analyzing {symbol}: {str(e)}")
-                st.info("Please verify the symbol and try again.")
+                error_msg = str(e)
+                if "not found" in error_msg.lower():
+                    st.error(f"Symbol {symbol} not found. Please verify the symbol.")
+                    if exchange == "US":
+                        st.info("For US stocks, don't add .NS suffix")
+                    else:
+                        st.info("For Indian stocks, make sure to use NSE symbols")
+                elif "market" in error_msg.lower():
+                    st.warning(error_msg)
+                    st.info("Try analyzing a different time period or wait for market hours")
+                else:
+                    st.error(f"Error analyzing {symbol}: {error_msg}")
+                    st.info("Please try again with different parameters")
                 
     except Exception as e:
         st.error(f"Application Error: {str(e)}")
         st.info("Please refresh the page or contact support if the issue persists.")
 
-if __name__ == "__main__":
-    main()
+# Add these utility functions:
+
+def get_market_hours(exchange):
+    """Get market hours for the selected exchange"""
+    if exchange == "India (NSE)":
+        return "9:15 AM - 3:30 PM IST"
+    return "9:30 AM - 4:00 PM EST"
+
+def is_valid_symbol(symbol):
+    """Basic symbol validation"""
+    if not symbol:
+        return False
+    
+    # Remove common suffixes
+    clean_symbol = symbol.replace('.NS', '').replace('-USD', '')
+    
+    # Check if the remaining string is alphanumeric
+    return clean_symbol.isalnum()
