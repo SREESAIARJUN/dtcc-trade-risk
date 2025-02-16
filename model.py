@@ -5,9 +5,6 @@ from datetime import datetime, timedelta
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from sklearn.ensemble import IsolationForest, RandomForestRegressor
 import xgboost as xgb
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import LSTM, Dense, Dropout
-import tensorflow as tf
 from ta.trend import SMAIndicator, EMAIndicator
 from ta.volatility import BollingerBands
 from ta.momentum import RSIIndicator
@@ -28,14 +25,11 @@ class AdvancedTradeRiskModel:
             n_estimators=100
         )
         self.xgb_model = None
-        self.lstm_model = None
         self.rf_model = None
+        self.models_trained = False
         
-        # Technical Indicators
-        self.technical_indicators = {}
-        
-        # Configure for CPU-only
-        tf.config.set_visible_devices([], 'GPU')
+        # Initialize models
+        self.initialize_models()
 
     def initialize_models(self):
         """Initialize and configure ML models"""
@@ -52,21 +46,6 @@ class AdvancedTradeRiskModel:
             self.rf_model = RandomForestRegressor(
                 n_estimators=100,
                 random_state=42
-            )
-            
-            # LSTM model
-            self.lstm_model = Sequential([
-                LSTM(50, return_sequences=True, input_shape=(60, 6)),
-                Dropout(0.2),
-                LSTM(50, return_sequences=False),
-                Dropout(0.2),
-                Dense(25),
-                Dense(1)
-            ])
-            self.lstm_model.compile(
-                optimizer='adam',
-                loss='mse',
-                metrics=['mae']
             )
             
         except Exception as e:
@@ -95,12 +74,12 @@ class AdvancedTradeRiskModel:
             
             # Adjust period and interval based on market hours
             if period == '1d':
-                interval = '5m'  # Use 5-minute intervals for better data availability
+                interval = '5m'
             elif period in ['5d', '1mo']:
                 interval = '15m'
             else:
                 interval = '1h'
-    
+
             # Fetch data
             ticker = yf.Ticker(symbol)
             data = ticker.history(period=period, interval=interval)
@@ -120,12 +99,7 @@ class AdvancedTradeRiskModel:
             return processed_data
             
         except Exception as e:
-            if "Symbol may be delisted" in str(e):
-                raise Exception(f"Symbol {symbol} may be delisted or invalid")
-            elif "401" in str(e):
-                raise Exception(f"API access error. Please try again later")
-            else:
-                raise Exception(f"Error fetching data for {symbol}: {str(e)}")
+            raise Exception(f"Error fetching data: {str(e)}")
 
     def calculate_technical_indicators(self, data):
         """Calculate technical indicators"""
@@ -169,47 +143,68 @@ class AdvancedTradeRiskModel:
             indicators = self.calculate_technical_indicators(data)
             data = pd.concat([data, indicators], axis=1)
             
+            # Fill NaN values
+            data = data.fillna(method='ffill').fillna(method='bfill')
+            
             return data
             
         except Exception as e:
             raise Exception(f"Error processing market data: {str(e)}")
 
-    def prepare_ml_features(self, data):
-        """Prepare features for ML models"""
+    def prepare_training_data(self, market_data):
+        """Prepare data for model training"""
         try:
-            features = [
-                'Close', 'Volume', 'Volatility', 'Volume_MA', 
-                'Price_Change', 'Spread', 'SMA', 'EMA', 'RSI'
-            ]
+            # Prepare features
+            features = ['Close', 'Volume', 'Volatility', 'Volume_MA', 'Price_Change', 'Spread', 'RSI']
+            X = market_data[features].fillna(method='ffill')
             
-            X = data[features].fillna(method='ffill')
-            X = self.scaler.fit_transform(X)
+            # Prepare target (next period's price change)
+            y = market_data['Close'].pct_change().shift(-1).fillna(0)
             
-            return X
+            # Scale features
+            X_scaled = self.scaler.fit_transform(X)
+            
+            return X_scaled, y
             
         except Exception as e:
-            raise Exception(f"Error preparing ML features: {str(e)}")
+            raise Exception(f"Error preparing training data: {str(e)}")
 
-    def detect_anomalies(self, data):
-        """Detect market anomalies"""
+    def train_models(self, market_data):
+        """Train all models with market data"""
         try:
-            X = self.prepare_ml_features(data)
-            anomalies = self.anomaly_detector.fit_predict(X)
-            return anomalies
+            if len(market_data) < 10:  # Minimum data requirement
+                raise ValueError("Insufficient data for training")
+                
+            X, y = self.prepare_training_data(market_data)
+            
+            # Train XGBoost
+            self.xgb_model.fit(X, y)
+            
+            # Train Random Forest
+            self.rf_model.fit(X, y)
+            
+            # Train Anomaly Detector
+            self.anomaly_detector.fit(X)
+            
+            self.models_trained = True
             
         except Exception as e:
-            raise Exception(f"Error detecting anomalies: {str(e)}")
+            raise Exception(f"Error training models: {str(e)}")
 
-    def predict_price_movement(self, data):
+    def predict_price_movement(self, market_data):
         """Predict future price movements"""
         try:
-            X = self.prepare_ml_features(data)
+            if not self.models_trained:
+                # Train models if not already trained
+                self.train_models(market_data)
             
-            # Ensemble predictions
-            xgb_pred = self.xgb_model.predict(X[-1:]) if self.xgb_model else 0
-            rf_pred = self.rf_model.predict(X[-1:]) if self.rf_model else 0
+            X, _ = self.prepare_training_data(market_data)
             
-            # Combine predictions
+            # Make predictions
+            xgb_pred = self.xgb_model.predict(X[-1:])
+            rf_pred = self.rf_model.predict(X[-1:])
+            
+            # Ensemble prediction
             ensemble_pred = (xgb_pred + rf_pred) / 2
             
             return ensemble_pred[0]
@@ -222,6 +217,10 @@ class AdvancedTradeRiskModel:
         try:
             if market_data.empty:
                 raise ValueError("No market data available")
+            
+            # Train models if not already trained
+            if not self.models_trained:
+                self.train_models(market_data)
                 
             latest_data = market_data.iloc[-1]
             avg_volume = market_data['Volume'].mean()
@@ -235,7 +234,8 @@ class AdvancedTradeRiskModel:
             }
             
             # ML-based risk metrics
-            anomaly_score = np.mean(self.detect_anomalies(market_data) == -1)
+            X, _ = self.prepare_training_data(market_data)
+            anomaly_score = np.mean(self.anomaly_detector.predict(X) == -1)
             price_movement = self.predict_price_movement(market_data)
             
             risk_metrics.update({
