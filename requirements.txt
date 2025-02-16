@@ -7,21 +7,9 @@ numpy==1.26.3
 streamlit==1.31.0
 plotly==5.18.0
 
-# Machine Learning & Deep Learning
+# Machine Learning
 scikit-learn==1.4.0
 xgboost==2.0.3
 
 # Technical Analysis
-ta==0.10.0
-
-# Data Visualization
-seaborn==0.13.0
-matplotlib==3.8.0
-
-# Time Series Analysis
-statsmodels==0.14.0
-
-# Utilities
-python-dotenv==1.0.0
-tqdm==4.66.0
-emoji==2.8.0
+pandas-ta==0.3.14b0
