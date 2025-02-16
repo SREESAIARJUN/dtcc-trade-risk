@@ -93,20 +93,39 @@ class AdvancedTradeRiskModel:
             is_indian = symbol.endswith('.NS')
             exchange = "India" if is_indian else "US"
             
-            if not self.is_market_open(exchange):
-                market_hours = "9:15 AM - 3:30 PM IST" if is_indian else "9:30 AM - 4:00 PM EST"
-                raise ValueError(f"{exchange} markets are closed (Trading hours: {market_hours})")
-
+            # Adjust period and interval based on market hours
+            if period == '1d':
+                interval = '5m'  # Use 5-minute intervals for better data availability
+            elif period in ['5d', '1mo']:
+                interval = '15m'
+            else:
+                interval = '1h'
+    
+            # Fetch data
             ticker = yf.Ticker(symbol)
             data = ticker.history(period=period, interval=interval)
             
             if data.empty:
-                raise ValueError(f"No data available for {symbol}")
+                # Try fetching with different parameters
+                data = ticker.history(period='1mo', interval='1h')
+                if data.empty:
+                    raise ValueError(f"No data available for {symbol}. Please verify the symbol.")
+            
+            # Process the data
+            processed_data = self.process_market_data(data)
+            
+            if len(processed_data) < 2:
+                raise ValueError(f"Insufficient data for {symbol}")
                 
-            return self.process_market_data(data)
+            return processed_data
             
         except Exception as e:
-            raise Exception(f"Error fetching data: {str(e)}")
+            if "Symbol may be delisted" in str(e):
+                raise Exception(f"Symbol {symbol} may be delisted or invalid")
+            elif "401" in str(e):
+                raise Exception(f"API access error. Please try again later")
+            else:
+                raise Exception(f"Error fetching data for {symbol}: {str(e)}")
 
     def calculate_technical_indicators(self, data):
         """Calculate technical indicators"""
