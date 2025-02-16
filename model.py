@@ -11,12 +11,22 @@ class TradeRiskModel:
         
     def fetch_market_data(self, symbol, period='1d', interval='1m'):
         """Fetch real-time market data using yfinance"""
-        ticker = yf.Ticker(symbol)
-        data = ticker.history(period=period, interval=interval)
-        return self.process_market_data(data)
+        try:
+            ticker = yf.Ticker(symbol)
+            data = ticker.history(period=period, interval=interval)
+            
+            if data.empty:
+                raise ValueError(f"No data available for symbol {symbol}")
+                
+            return self.process_market_data(data)
+        except Exception as e:
+            raise ValueError(f"Error fetching data for {symbol}: {str(e)}")
     
     def process_market_data(self, data):
         """Calculate market metrics"""
+        if data.empty:
+            raise ValueError("No market data available to process")
+            
         data['Volatility'] = data['Close'].rolling(window=20).std()
         data['Volume_MA'] = data['Volume'].rolling(window=20).mean()
         data['Price_Change'] = data['Close'].pct_change()
@@ -25,14 +35,23 @@ class TradeRiskModel:
     
     def calculate_risk_metrics(self, market_data, trade_size):
         """Calculate comprehensive risk metrics"""
+        if market_data.empty:
+            return {
+                'volatility_risk': 1.0,
+                'liquidity_risk': 1.0,
+                'spread_risk': 1.0,
+                'volume_risk': 1.0,
+                'total_risk': 1.0
+            }
+            
         latest_data = market_data.iloc[-1]
         avg_volume = market_data['Volume'].mean()
         
         risk_metrics = {
-            'volatility_risk': min(1, latest_data['Volatility'] / latest_data['Close']),
-            'liquidity_risk': min(1, trade_size / avg_volume),
-            'spread_risk': min(1, latest_data['Spread'] / latest_data['Close']),
-            'volume_risk': min(1, 1 - (latest_data['Volume'] / latest_data['Volume_MA']))
+            'volatility_risk': min(1, latest_data['Volatility'] / latest_data['Close'] if latest_data['Close'] != 0 else 1),
+            'liquidity_risk': min(1, trade_size / avg_volume if avg_volume != 0 else 1),
+            'spread_risk': min(1, latest_data['Spread'] / latest_data['Close'] if latest_data['Close'] != 0 else 1),
+            'volume_risk': min(1, 1 - (latest_data['Volume'] / latest_data['Volume_MA'] if latest_data['Volume_MA'] != 0 else 1))
         }
         
         # Calculate total risk score
@@ -74,6 +93,9 @@ class TradeRiskModel:
     
     def get_optimal_execution_time(self, market_data):
         """Suggest optimal execution time based on historical patterns"""
+        if market_data.empty:
+            return "Unable to determine optimal execution time due to lack of data"
+            
         market_data['Hour'] = pd.to_datetime(market_data.index).hour
         
         # Analyze risk by hour
@@ -83,7 +105,7 @@ class TradeRiskModel:
             'Spread': 'mean'
         })
         
-        # Find hour with lowest risk (simple average of normalized metrics)
+        # Find hour with lowest risk
         hourly_risk = (hourly_risk - hourly_risk.mean()) / hourly_risk.std()
         best_hour = hourly_risk.mean(axis=1).idxmin()
         
