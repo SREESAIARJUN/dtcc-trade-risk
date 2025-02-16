@@ -12,7 +12,12 @@ import emoji
 st.set_page_config(
     page_title="Advanced Trade Risk Analytics",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
+    menu_items={
+        'Get Help': 'https://github.com/yourusername/trade-risk-analytics',
+        'Report a bug': "https://github.com/yourusername/trade-risk-analytics/issues",
+        'About': "# Trade Risk Analytics\n This application provides advanced risk analysis for trading decisions."
+    }
 )
 
 # Custom CSS
@@ -29,6 +34,18 @@ st.markdown("""
         background-color: #f0f2f6;
         padding: 1rem;
         border-radius: 0.5rem;
+    }
+    .risk-high {
+        color: red;
+        font-weight: bold;
+    }
+    .risk-medium {
+        color: orange;
+        font-weight: bold;
+    }
+    .risk-low {
+        color: green;
+        font-weight: bold;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -97,6 +114,7 @@ def plot_price_history(market_data):
     """Create interactive price history chart"""
     fig = go.Figure()
     
+    # Candlestick chart
     fig.add_trace(go.Candlestick(
         x=market_data.index,
         open=market_data['Open'],
@@ -106,12 +124,29 @@ def plot_price_history(market_data):
         name="Price"
     ))
     
-    fig.add_trace(go.Scatter(
-        x=market_data.index,
-        y=market_data['SMA'],
-        name="20-day SMA",
-        line=dict(color='blue', width=1)
-    ))
+    # Add technical indicators
+    if 'SMA' in market_data.columns:
+        fig.add_trace(go.Scatter(
+            x=market_data.index,
+            y=market_data['SMA'],
+            name="20-day SMA",
+            line=dict(color='blue', width=1)
+        ))
+    
+    if 'BB_upper' in market_data.columns and 'BB_lower' in market_data.columns:
+        fig.add_trace(go.Scatter(
+            x=market_data.index,
+            y=market_data['BB_upper'],
+            name="BB Upper",
+            line=dict(color='gray', width=1, dash='dash')
+        ))
+        fig.add_trace(go.Scatter(
+            x=market_data.index,
+            y=market_data['BB_lower'],
+            name="BB Lower",
+            line=dict(color='gray', width=1, dash='dash'),
+            fill='tonexty'
+        ))
     
     fig.update_layout(
         title="Price History with Technical Indicators",
@@ -147,8 +182,6 @@ def show_stock_examples(exchange):
     for symbol, company in examples.items():
         st.markdown(f"**{symbol}** - {company}")
 
-# In app.py, update the main function:
-
 def validate_symbol(symbol, exchange):
     """Validate trading symbol"""
     symbol = symbol.strip().upper()
@@ -157,12 +190,49 @@ def validate_symbol(symbol, exchange):
         if not symbol.endswith('.NS'):
             symbol = f"{symbol}.NS"
     else:
-        # Remove any NS suffix for US stocks
         symbol = symbol.replace('.NS', '')
     
     return symbol
 
-# ... (keep all the previous imports and functions until the main function)
+def display_metrics(market_data, latest_data):
+    """Display key market metrics"""
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.metric(
+            "Current Price",
+            f"${latest_data['Close']:.2f}",
+            f"{latest_data['Price_Change']:.2%}"
+        )
+        st.metric(
+            "Volume",
+            f"{latest_data['Volume']:,.0f}",
+            f"{(latest_data['Volume']/latest_data['Volume_MA']-1):.1%}" if 'Volume_MA' in latest_data else None
+        )
+    
+    with col2:
+        st.metric(
+            "Volatility",
+            f"{latest_data['Volatility']:.2%}"
+        )
+        if 'RSI' in latest_data:
+            st.metric(
+                "RSI",
+                f"{latest_data['RSI']:.1f}",
+                delta_color="inverse"
+            )
+    
+    with col3:
+        st.metric(
+            "Spread",
+            f"${latest_data['Spread']:.2f}"
+        )
+        if 'BB_upper' in latest_data and 'BB_lower' in latest_data:
+            bb_width = (latest_data['BB_upper'] - latest_data['BB_lower']) / latest_data['Close']
+            st.metric(
+                "Bollinger Band Width",
+                f"{bb_width:.2%}"
+            )
 
 def main():
     try:
@@ -171,7 +241,6 @@ def main():
         
         # Initialize model
         model = AdvancedTradeRiskModel()
-        model.initialize_models()  # Make sure models are initialized
         
         # Sidebar configurations
         with st.sidebar:
@@ -185,6 +254,15 @@ def main():
             
             show_technical = st.checkbox("Show Technical Indicators", value=True)
             show_predictions = st.checkbox("Show Price Predictions", value=True)
+            
+            st.markdown("---")
+            st.markdown("### About")
+            st.markdown("""
+            This platform provides advanced risk analysis for trading decisions using:
+            - Machine Learning Models
+            - Technical Indicators
+            - Market Metrics
+            """)
         
         # Main content
         col1, col2 = st.columns([2, 1])
@@ -220,8 +298,7 @@ def main():
         
         if st.button("Analyze Risk", type="primary"):
             try:
-                with st.spinner(f"Analyzing {symbol}..."):
-                    # Fetch and process data
+                with st.spinner(f"Fetching market data for {symbol}..."):
                     market_data = model.fetch_market_data(
                         symbol=symbol,
                         period=analysis_period
@@ -230,8 +307,8 @@ def main():
                     if market_data is None or market_data.empty:
                         st.error(f"No data available for {symbol}. Please verify the symbol.")
                         return
-                    
-                    # Calculate risk metrics and predictions
+                
+                with st.spinner("Calculating risk metrics..."):
                     risk_metrics = model.calculate_risk_metrics(market_data, trade_size)
                     recommendations = model.get_trade_recommendations(risk_metrics, trade_size)
                     optimal_time = model.get_optimal_execution_time(market_data)
@@ -250,48 +327,42 @@ def main():
                         if show_technical:
                             st.plotly_chart(plot_price_history(market_data), use_container_width=True)
                         
-                        # Market metrics
                         latest_data = market_data.iloc[-1]
-                        metrics_col1, metrics_col2, metrics_col3 = st.columns(3)
-                        
-                        with metrics_col1:
-                            st.metric("Current Price", f"${latest_data['Close']:.2f}")
-                            st.metric("Volume", f"{latest_data['Volume']:,}")
-                        
-                        with metrics_col2:
-                            st.metric("Volatility", f"{latest_data['Volatility']:.2%}")
-                            if 'RSI' in latest_data:
-                                st.metric("RSI", f"{latest_data['RSI']:.1f}")
-                        
-                        with metrics_col3:
-                            st.metric("Spread", f"${latest_data['Spread']:.2f}")
-                            st.metric("Volume Trend", 
-                                    f"{(latest_data['Volume']/latest_data['Volume_MA']-1):.1%}" 
-                                    if 'Volume_MA' in latest_data and latest_data['Volume_MA'] != 0 
-                                    else "N/A")
+                        display_metrics(market_data, latest_data)
                     
                     with tab3:
                         st.subheader("Trading Recommendations")
+                        
+                        # Risk level with colored badge
+                        risk_color = {
+                            "High": "risk-high",
+                            "Medium-High": "risk-medium",
+                            "Medium": "risk-medium",
+                            "Low": "risk-low"
+                        }
+                        
                         st.markdown(f"""
-                        - **Risk Level:** {recommendations['risk_level']}
+                        - **Risk Level:** <span class="{risk_color[recommendations['risk_level']]}">{recommendations['risk_level']}</span>
                         - **Recommended Action:** {recommendations['action']}
                         - **Suggested Position Size:** {recommendations['suggested_size']:,} shares
                         - **Optimal Execution Time:** {optimal_time}
-                        - **Confidence Score:** {recommendations.get('confidence', 0):.1%}
-                        """)
+                        - **Confidence Score:** {recommendations['confidence']:.1%}
+                        """, unsafe_allow_html=True)
                         
                         if recommendations['risk_level'] in ['High', 'Medium-High']:
                             st.warning("⚠️ High risk detected. Consider reducing position size or waiting for better conditions.")
                         
-                        # Additional insights
-                        st.subheader("Additional Insights")
+                        # Market status
+                        st.subheader("Market Information")
                         market_status = "Open" if model.is_market_open(exchange) else "Closed"
+                        market_hours = "9:15 AM - 3:30 PM IST" if exchange == "India (NSE)" else "9:30 AM - 4:00 PM EST"
+                        
                         st.info(f"""
                         - Market Status: {market_status}
-                        - Trading Hours: {get_market_hours(exchange)}
+                        - Trading Hours: {market_hours}
                         - Analysis Period: {analysis_period}
                         """)
-                    
+                
             except Exception as e:
                 error_msg = str(e)
                 if "not found" in error_msg.lower():
@@ -310,30 +381,6 @@ def main():
     except Exception as e:
         st.error(f"Application Error: {str(e)}")
         st.info("Please refresh the page or contact support if the issue persists.")
-
-# ... (keep the utility functions at the end)
-
-
-
-# Add these utility functions:
-
-def get_market_hours(exchange):
-    """Get market hours for the selected exchange"""
-    if exchange == "India (NSE)":
-        return "9:15 AM - 3:30 PM IST"
-    return "9:30 AM - 4:00 PM EST"
-
-def is_valid_symbol(symbol):
-    """Basic symbol validation"""
-    if not symbol:
-        return False
-    
-    # Remove common suffixes
-    clean_symbol = symbol.replace('.NS', '').replace('-USD', '')
-    
-    # Check if the remaining string is alphanumeric
-    return clean_symbol.isalnum()
-
 
 if __name__ == "__main__":
     main()
