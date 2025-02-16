@@ -9,19 +9,61 @@ class TradeRiskModel:
     def __init__(self):
         self.scaler = StandardScaler()
         
+    def is_market_open(self, exchange="US"):
+        now = datetime.now()
+        if exchange == "India":
+            # Indian Market Hours (9:15 AM - 3:30 PM IST)
+            india_time = now + timedelta(hours=5, minutes=30)  # Convert to IST
+            market_open = india_time.replace(hour=9, minute=15)
+            market_close = india_time.replace(hour=15, minute=30)
+            return market_open <= india_time <= market_close
+        else:
+            # US Market Hours (9:30 AM - 4:00 PM EST)
+            est_time = now - timedelta(hours=5)  # Convert to EST
+            market_open = est_time.replace(hour=9, minute=30)
+            market_close = est_time.replace(hour=16, minute=0)
+            return market_open <= est_time <= market_close
+
+    def convert_to_usd(self, price, from_currency="INR"):
+        if from_currency == "INR":
+            # Approximate USD/INR rate (you might want to fetch real-time rates)
+            usd_inr_rate = 83.0
+            return price / usd_inr_rate
+        return price
+
     def fetch_market_data(self, symbol, period='1d', interval='1m'):
         """Fetch real-time market data using yfinance"""
         try:
+            # Determine exchange
+            is_indian = symbol.endswith('.NS')
+            exchange = "India" if is_indian else "US"
+            
+            # Check market hours
+            if not self.is_market_open(exchange):
+                market_hours = "9:15 AM - 3:30 PM IST" if is_indian else "9:30 AM - 4:00 PM EST"
+                raise ValueError(f"{exchange} markets are closed (Trading hours: {market_hours})")
+
             ticker = yf.Ticker(symbol)
             data = ticker.history(period=period, interval=interval)
             
             if data.empty:
-                raise ValueError(f"No data available for symbol {symbol}")
+                if is_indian:
+                    raise ValueError(f"No data available for {symbol}. Please verify the symbol.")
+                else:
+                    raise ValueError(f"No data available for symbol {symbol}")
+            
+            # Convert prices to USD if Indian stock
+            if is_indian:
+                for col in ['Open', 'High', 'Low', 'Close']:
+                    data[col] = data[col].apply(lambda x: self.convert_to_usd(x, "INR"))
                 
             return self.process_market_data(data)
         except Exception as e:
+            if "not found" in str(e).lower():
+                suggestion = f"{symbol[:-3]} (without .NS)" if is_indian else f"{symbol}.NS"
+                raise ValueError(f"Symbol {symbol} not found. Did you mean {suggestion}?")
             raise ValueError(f"Error fetching data for {symbol}: {str(e)}")
-    
+
     def process_market_data(self, data):
         """Calculate market metrics"""
         if data.empty:
@@ -54,7 +96,6 @@ class TradeRiskModel:
             'volume_risk': min(1, 1 - (latest_data['Volume'] / latest_data['Volume_MA'] if latest_data['Volume_MA'] != 0 else 1))
         }
         
-        # Calculate total risk score
         weights = {
             'volatility_risk': 0.3,
             'liquidity_risk': 0.3,
@@ -98,14 +139,12 @@ class TradeRiskModel:
             
         market_data['Hour'] = pd.to_datetime(market_data.index).hour
         
-        # Analyze risk by hour
         hourly_risk = market_data.groupby('Hour').agg({
             'Volatility': 'mean',
             'Volume': 'mean',
             'Spread': 'mean'
         })
         
-        # Find hour with lowest risk
         hourly_risk = (hourly_risk - hourly_risk.mean()) / hourly_risk.std()
         best_hour = hourly_risk.mean(axis=1).idxmin()
         
