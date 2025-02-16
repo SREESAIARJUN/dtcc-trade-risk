@@ -1,30 +1,27 @@
 # Core Data Processing
-yfinance>=0.2.31
-pandas>=2.2.0
-numpy>=1.26.3
+yfinance==0.2.31
+pandas==2.2.0
+numpy==1.26.3
 
 # Web Interface
-streamlit>=1.31.0
-plotly>=5.18.0
+streamlit==1.31.0
+plotly==5.18.0
 
 # Machine Learning & Deep Learning
-scikit-learn>=1.4.0
-xgboost>=2.0.3
-tensorflow-cpu>=2.15.0
-torch>=2.1.0
+scikit-learn==1.4.0
+xgboost==2.0.3
 
 # Technical Analysis
-ta>=0.10.0
-pandas-ta>=0.3.0b0
+ta==0.10.0
 
 # Data Visualization
-seaborn>=0.13.0
-matplotlib>=3.8.0
+seaborn==0.13.0
+matplotlib==3.8.0
 
 # Time Series Analysis
-statsmodels>=0.14.0
+statsmodels==0.14.0
 
 # Utilities
-python-dotenv>=1.0.0
-tqdm>=4.66.0
-emoji>=2.8.0
+python-dotenv==1.0.0
+tqdm==4.66.0
+emoji==2.8.0
