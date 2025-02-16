@@ -2,7 +2,6 @@ import streamlit as st
 import plotly.graph_objects as go
 import plotly.express as px
 from model import TradeRiskModel
-import time
 
 st.set_page_config(page_title="Trade Settlement Risk Predictor", layout="wide")
 
@@ -56,49 +55,60 @@ def main():
     
     # Analysis button
     if st.button("Analyze Risk"):
-        with st.spinner("Fetching market data and analyzing risk..."):
-            # Fetch and analyze data
-            market_data = model.fetch_market_data(symbol)
-            risk_metrics = model.calculate_risk_metrics(market_data, trade_size)
-            recommendations = model.get_trade_recommendations(risk_metrics, trade_size)
-            optimal_time = model.get_optimal_execution_time(market_data)
-            
-            # Display results
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.plotly_chart(create_gauge_chart(risk_metrics['total_risk']))
+        try:
+            with st.spinner("Fetching market data and analyzing risk..."):
+                # Fetch and analyze data
+                market_data = model.fetch_market_data(symbol)
                 
-                # Risk level indicator
-                if risk_metrics['total_risk'] > 0.7:
-                    st.error(f"⚠️ High Risk Level: {risk_metrics['total_risk']:.2%}")
-                elif risk_metrics['total_risk'] > 0.3:
-                    st.warning(f"⚠️ Medium Risk Level: {risk_metrics['total_risk']:.2%}")
-                else:
-                    st.success(f"✅ Low Risk Level: {risk_metrics['total_risk']:.2%}")
-            
-            with col2:
-                st.plotly_chart(create_risk_breakdown(risk_metrics))
-            
-            # Recommendations section
-            st.subheader("📊 Trade Recommendations")
-            st.write(f"Risk Level: {recommendations['risk_level']}")
-            st.write(f"Recommended Action: {recommendations['action']}")
-            st.write(f"Suggested Trade Size: {recommendations['suggested_size']:,} shares")
-            st.write(f"Optimal Execution Time: {optimal_time}")
-            
-            # Market conditions
-            st.subheader("📈 Current Market Conditions")
-            latest_data = market_data.iloc[-1]
-            metrics_col1, metrics_col2 = st.columns(2)
-            
-            with metrics_col1:
-                st.metric("Current Price", f"${latest_data['Close']:.2f}")
-                st.metric("Volume", f"{latest_data['Volume']:,}")
-            
-            with metrics_col2:
-                st.metric("Volatility", f"{latest_data['Volatility']:.2%}")
-                st.metric("Spread", f"${latest_data['Spread']:.2f}")
+                if market_data.empty:
+                    st.error(f"No data available for symbol {symbol}")
+                    return
+                    
+                risk_metrics = model.calculate_risk_metrics(market_data, trade_size)
+                recommendations = model.get_trade_recommendations(risk_metrics, trade_size)
+                optimal_time = model.get_optimal_execution_time(market_data)
+                
+                # Display results
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.plotly_chart(create_gauge_chart(risk_metrics['total_risk']))
+                    
+                    # Risk level indicator
+                    if risk_metrics['total_risk'] > 0.7:
+                        st.error(f"⚠️ High Risk Level: {risk_metrics['total_risk']:.2%}")
+                    elif risk_metrics['total_risk'] > 0.3:
+                        st.warning(f"⚠️ Medium Risk Level: {risk_metrics['total_risk']:.2%}")
+                    else:
+                        st.success(f"✅ Low Risk Level: {risk_metrics['total_risk']:.2%}")
+                
+                with col2:
+                    st.plotly_chart(create_risk_breakdown(risk_metrics))
+                
+                # Recommendations section
+                st.subheader("📊 Trade Recommendations")
+                st.write(f"Risk Level: {recommendations['risk_level']}")
+                st.write(f"Recommended Action: {recommendations['action']}")
+                st.write(f"Suggested Trade Size: {recommendations['suggested_size']:,} shares")
+                st.write(f"Optimal Execution Time: {optimal_time}")
+                
+                if not market_data.empty:
+                    # Market conditions
+                    st.subheader("📈 Current Market Conditions")
+                    latest_data = market_data.iloc[-1]
+                    metrics_col1, metrics_col2 = st.columns(2)
+                    
+                    with metrics_col1:
+                        st.metric("Current Price", f"${latest_data['Close']:.2f}")
+                        st.metric("Volume", f"{latest_data['Volume']:,}")
+                    
+                    with metrics_col2:
+                        st.metric("Volatility", f"{latest_data['Volatility']:.2%}")
+                        st.metric("Spread", f"${latest_data['Spread']:.2f}")
+                        
+        except Exception as e:
+            st.error(f"Error analyzing symbol {symbol}: {str(e)}")
+            st.info("Please try a different symbol or check if the symbol is correct.")
 
 if __name__ == "__main__":
     main()
