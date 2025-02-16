@@ -3,7 +3,11 @@ import plotly.graph_objects as go
 import plotly.express as px
 from model import TradeRiskModel
 
-st.set_page_config(page_title="Trade Settlement Risk Predictor", layout="wide")
+st.set_page_config(
+    page_title="Trade Settlement Risk Predictor",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
 def create_gauge_chart(risk_score):
     fig = go.Figure(go.Indicator(
@@ -23,7 +27,6 @@ def create_gauge_chart(risk_score):
     return fig
 
 def create_risk_breakdown(risk_metrics):
-    # Remove total_risk for breakdown chart
     metrics = {k: v for k, v in risk_metrics.items() if k != 'total_risk'}
     
     fig = px.bar(
@@ -38,26 +41,69 @@ def create_risk_breakdown(risk_metrics):
     )
     return fig
 
+def show_stock_examples(exchange):
+    if exchange == "India (NSE)":
+        st.info("""
+        Example Indian Symbols:
+        - TCS (Tata Consultancy Services)
+        - RELIANCE (Reliance Industries)
+        - INFY (Infosys)
+        - HDFCBANK (HDFC Bank)
+        - WIPRO (Wipro)
+        - TATAMOTORS (Tata Motors)
+        """)
+    else:
+        st.info("""
+        Example US Symbols:
+        - AAPL (Apple)
+        - MSFT (Microsoft)
+        - GOOGL (Google)
+        - AMZN (Amazon)
+        - META (Meta/Facebook)
+        - TSLA (Tesla)
+        """)
+
 def main():
     st.title("🚀 Trade Settlement Risk Predictor")
+    st.markdown("### Predict settlement risk for T+1 trading")
     
     # Initialize model
     model = TradeRiskModel()
     
     # User inputs
-    col1, col2 = st.columns(2)
+    col1, col2 = st.columns([2, 1])
     
     with col1:
-        symbol = st.text_input("Stock Symbol", "AAPL")
-        trade_size = st.number_input("Trade Size (shares)", 
-                                   min_value=1, 
-                                   value=100)
+        exchange = st.selectbox(
+            "Select Exchange",
+            ["US", "India (NSE)"],
+            index=0
+        )
+        
+        symbol = st.text_input(
+            "Stock Symbol", 
+            "AAPL" if exchange == "US" else "TCS"
+        )
+        
+        # Modify symbol based on exchange
+        if exchange == "India (NSE)":
+            symbol = f"{symbol}.NS"
+            
+        trade_size = st.number_input(
+            "Trade Size (shares)", 
+            min_value=1, 
+            value=100
+        )
+        
+        st.caption(f"Using symbol: {symbol}")
+        
+    with col2:
+        show_stock_examples(exchange)
     
     # Analysis button
-    if st.button("Analyze Risk"):
+    if st.button("Analyze Risk", type="primary"):
         try:
             with st.spinner("Fetching market data and analyzing risk..."):
-                # Fetch and analyze data
                 market_data = model.fetch_market_data(symbol)
                 
                 if market_data.empty:
@@ -74,7 +120,6 @@ def main():
                 with col1:
                     st.plotly_chart(create_gauge_chart(risk_metrics['total_risk']))
                     
-                    # Risk level indicator
                     if risk_metrics['total_risk'] > 0.7:
                         st.error(f"⚠️ High Risk Level: {risk_metrics['total_risk']:.2%}")
                     elif risk_metrics['total_risk'] > 0.3:
@@ -99,7 +144,8 @@ def main():
                     metrics_col1, metrics_col2 = st.columns(2)
                     
                     with metrics_col1:
-                        st.metric("Current Price", f"${latest_data['Close']:.2f}")
+                        currency = "USD" if exchange == "US" else "USD (converted from INR)"
+                        st.metric("Current Price", f"${latest_data['Close']:.2f} {currency}")
                         st.metric("Volume", f"{latest_data['Volume']:,}")
                     
                     with metrics_col2:
