@@ -162,6 +162,8 @@ def validate_symbol(symbol, exchange):
     
     return symbol
 
+# ... (keep all the previous imports and functions until the main function)
+
 def main():
     try:
         st.title("🚀 Advanced Trade Risk Analytics Platform")
@@ -169,6 +171,7 @@ def main():
         
         # Initialize model
         model = AdvancedTradeRiskModel()
+        model.initialize_models()  # Make sure models are initialized
         
         # Sidebar configurations
         with st.sidebar:
@@ -228,7 +231,66 @@ def main():
                         st.error(f"No data available for {symbol}. Please verify the symbol.")
                         return
                     
-                    # Rest of your analysis code...
+                    # Calculate risk metrics and predictions
+                    risk_metrics = model.calculate_risk_metrics(market_data, trade_size)
+                    recommendations = model.get_trade_recommendations(risk_metrics, trade_size)
+                    optimal_time = model.get_optimal_execution_time(market_data)
+                    
+                    # Display results in tabs
+                    tab1, tab2, tab3 = st.tabs(["Risk Analysis", "Market Data", "Recommendations"])
+                    
+                    with tab1:
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.plotly_chart(create_gauge_chart(risk_metrics['total_risk']), use_container_width=True)
+                        with col2:
+                            st.plotly_chart(create_risk_breakdown(risk_metrics), use_container_width=True)
+                    
+                    with tab2:
+                        if show_technical:
+                            st.plotly_chart(plot_price_history(market_data), use_container_width=True)
+                        
+                        # Market metrics
+                        latest_data = market_data.iloc[-1]
+                        metrics_col1, metrics_col2, metrics_col3 = st.columns(3)
+                        
+                        with metrics_col1:
+                            st.metric("Current Price", f"${latest_data['Close']:.2f}")
+                            st.metric("Volume", f"{latest_data['Volume']:,}")
+                        
+                        with metrics_col2:
+                            st.metric("Volatility", f"{latest_data['Volatility']:.2%}")
+                            if 'RSI' in latest_data:
+                                st.metric("RSI", f"{latest_data['RSI']:.1f}")
+                        
+                        with metrics_col3:
+                            st.metric("Spread", f"${latest_data['Spread']:.2f}")
+                            st.metric("Volume Trend", 
+                                    f"{(latest_data['Volume']/latest_data['Volume_MA']-1):.1%}" 
+                                    if 'Volume_MA' in latest_data and latest_data['Volume_MA'] != 0 
+                                    else "N/A")
+                    
+                    with tab3:
+                        st.subheader("Trading Recommendations")
+                        st.markdown(f"""
+                        - **Risk Level:** {recommendations['risk_level']}
+                        - **Recommended Action:** {recommendations['action']}
+                        - **Suggested Position Size:** {recommendations['suggested_size']:,} shares
+                        - **Optimal Execution Time:** {optimal_time}
+                        - **Confidence Score:** {recommendations.get('confidence', 0):.1%}
+                        """)
+                        
+                        if recommendations['risk_level'] in ['High', 'Medium-High']:
+                            st.warning("⚠️ High risk detected. Consider reducing position size or waiting for better conditions.")
+                        
+                        # Additional insights
+                        st.subheader("Additional Insights")
+                        market_status = "Open" if model.is_market_open(exchange) else "Closed"
+                        st.info(f"""
+                        - Market Status: {market_status}
+                        - Trading Hours: {get_market_hours(exchange)}
+                        - Analysis Period: {analysis_period}
+                        """)
                     
             except Exception as e:
                 error_msg = str(e)
@@ -249,6 +311,10 @@ def main():
         st.error(f"Application Error: {str(e)}")
         st.info("Please refresh the page or contact support if the issue persists.")
 
+# ... (keep the utility functions at the end)
+
+
+
 # Add these utility functions:
 
 def get_market_hours(exchange):
@@ -267,3 +333,7 @@ def is_valid_symbol(symbol):
     
     # Check if the remaining string is alphanumeric
     return clean_symbol.isalnum()
+
+
+if __name__ == "__main__":
+    main()
