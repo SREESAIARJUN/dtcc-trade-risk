@@ -28,7 +28,7 @@ class AdvancedTradeRiskModel:
         self.models_trained = False
 
     def fetch_market_data(self, symbol, period='1mo', interval='1h'):
-        api_url = f'https://api.twelvedata.com/time_series?symbol={symbol}&interval={interval}&apikey=st.secrets["TWELVEDATA_API_KEY"]'
+        api_url = f'https://api.twelvedata.com/time_series?symbol={symbol}&interval={interval}&apikey={st.secrets["TWELVEDATA_API_KEY"]}'
         response = requests.get(api_url)
         data = response.json()
         if 'values' not in data:
@@ -71,10 +71,17 @@ st.set_page_config(page_title='Advanced Trade Risk Analytics', layout='wide')
 st.title("🚀 Advanced Trade Risk Analytics Platform")
 model = AdvancedTradeRiskModel()
 
-symbol = st.text_input("Enter Stock Symbol:", "AAPL")
+col1, col2, col3 = st.columns(3)
+with col1:
+    symbol = st.text_input("Stock Symbol", "AAPL")
+with col2:
+    period = st.selectbox("Analysis Period", ["1d", "5d", "1mo", "3mo"], index=2)
+with col3:
+    trade_size = st.number_input("Trade Size (shares)", min_value=1, value=100)
+
 if st.button("Analyze Risk"):
     with st.spinner("Fetching market data..."):
-        market_data = model.fetch_market_data(symbol)
+        market_data = model.fetch_market_data(symbol, period=period)
         if market_data is None:
             st.error("No data found for the given symbol.")
         else:
