@@ -13,3 +13,4 @@ xgboost==2.0.3
 
 # Technical Analysis
 pandas-ta==0.3.14b0
+ta
