@@ -61,11 +61,7 @@ class AdvancedTradeRiskModel:
         rf_pred = self.rf_model.predict(X_scaled[-1:])
         return (xgb_pred[0] + rf_pred[0]) / 2
 
-async def fetch_real_time_data(symbol, callback):
-    async with websockets.connect(f'wss://real-time-data.com/{symbol}') as websocket:
-        while True:
-            data = await websocket.recv()
-            callback(data)
+
 
 st.set_page_config(page_title='Advanced Trade Risk Analytics', layout='wide')
 st.title("🚀 Advanced Trade Risk Analytics Platform")
@@ -89,4 +85,4 @@ if st.button("Analyze Risk"):
             risk_prediction = model.predict_price_movement(market_data)
             st.metric("Predicted Price Movement:", f"{risk_prediction:.2%}")
             st.plotly_chart(px.line(market_data, x=market_data.index, y=['close', 'VWAP'], title="Price & VWAP"), use_container_width=True)
-            asyncio.run(fetch_real_time_data(symbol, lambda data: st.write(f"Live Update: {data}")))
+            
