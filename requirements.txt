@@ -1,17 +1,12 @@
-# Core Data Processing
-yfinance==0.2.31
-pandas==2.2.0
-numpy==1.26.3
-
-# Web Interface
-streamlit==1.31.0
-plotly==5.18.0
-
-# Machine Learning
-scikit-learn==1.4.0
-xgboost==2.0.3
-
-# Technical Analysis
-pandas-ta==0.3.14b0
+streamlit
+plotly
+pandas
+numpy
+scikit-learn
+xgboost
 ta
-emoji
+requests
+shap
+joblib
+websockets
+asyncio
