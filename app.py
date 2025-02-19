@@ -14,8 +14,6 @@ import requests
 import shap
 import joblib
 import warnings
-import asyncio
-import websockets
 warnings.filterwarnings('ignore')
 
 class AdvancedTradeRiskModel:
@@ -42,14 +40,28 @@ class AdvancedTradeRiskModel:
         df['MACD'] = MACD(close=df['close']).macd()
         return df
 
-    def train_models(self, market_data):
-        features = ['close', 'volume', 'VWAP', 'ATR', 'MACD']
-        X = market_data[features].fillna(method='ffill')
-        y = market_data['close'].pct_change().shift(-1).fillna(0)
-        X_scaled = self.scaler.fit_transform(X)
-        self.xgb_model.fit(X_scaled, y)
-        self.rf_model.fit(X_scaled, y)
-        self.models_trained = True
+    def calculate_risk_metrics(self, market_data, trade_size):
+        latest_data = market_data.iloc[-1]
+        avg_volume = market_data['volume'].mean()
+        risk_metrics = {
+            'volatility_risk': min(1, latest_data['ATR'] / latest_data['close']),
+            'liquidity_risk': min(1, trade_size / avg_volume if avg_volume != 0 else 1),
+            'spread_risk': min(1, (latest_data['high'] - latest_data['low']) / latest_data['close']),
+            'price_movement_risk': abs(self.predict_price_movement(market_data))
+        }
+        total_risk = sum(risk_metrics.values()) / len(risk_metrics)
+        risk_metrics['total_risk'] = total_risk
+        return risk_metrics
+
+    def generate_trade_recommendation(self, risk_score):
+        if risk_score > 0.8:
+            return "High risk detected. Consider reducing position size or avoiding trade."
+        elif risk_score > 0.6:
+            return "Medium-high risk. Split trade or wait for better market conditions."
+        elif risk_score > 0.4:
+            return "Moderate risk. Proceed with caution and monitor market changes."
+        else:
+            return "Low risk detected. You can proceed with the trade as planned."
 
     def predict_price_movement(self, market_data):
         if not self.models_trained:
@@ -60,8 +72,6 @@ class AdvancedTradeRiskModel:
         xgb_pred = self.xgb_model.predict(X_scaled[-1:])
         rf_pred = self.rf_model.predict(X_scaled[-1:])
         return (xgb_pred[0] + rf_pred[0]) / 2
-
-
 
 st.set_page_config(page_title='Advanced Trade Risk Analytics', layout='wide')
 st.title("🚀 Advanced Trade Risk Analytics Platform")
@@ -82,7 +92,17 @@ if st.button("Analyze Risk"):
             st.error("No data found for the given symbol.")
         else:
             model.train_models(market_data)
-            risk_prediction = model.predict_price_movement(market_data)
-            st.metric("Predicted Price Movement:", f"{risk_prediction:.2%}")
-            st.plotly_chart(px.line(market_data, x=market_data.index, y=['close', 'VWAP'], title="Price & VWAP"), use_container_width=True)
+            risk_metrics = model.calculate_risk_metrics(market_data, trade_size)
+            recommendation = model.generate_trade_recommendation(risk_metrics['total_risk'])
             
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric("Predicted Price Movement:", f"{model.predict_price_movement(market_data):.2%}")
+                st.metric("Total Risk Score:", f"{risk_metrics['total_risk']:.2f}")
+            with col2:
+                st.plotly_chart(px.bar(x=list(risk_metrics.keys()), y=list(risk_metrics.values()),
+                                       title="Risk Breakdown", color=list(risk_metrics.values()),
+                                       color_continuous_scale="RdYlGn_r"), use_container_width=True)
+            
+            st.subheader("Trade Recommendation")
+            st.write(recommendation)
