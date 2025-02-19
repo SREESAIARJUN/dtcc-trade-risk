@@ -40,6 +40,15 @@ class AdvancedTradeRiskModel:
         df['MACD'] = MACD(close=df['close']).macd()
         return df
 
+    def train_models(self, market_data):
+        features = ['close', 'volume', 'VWAP', 'ATR', 'MACD']
+        X = market_data[features].fillna(method='ffill')
+        y = market_data['close'].pct_change().shift(-1).fillna(0)
+        X_scaled = self.scaler.fit_transform(X)
+        self.xgb_model.fit(X_scaled, y)
+        self.rf_model.fit(X_scaled, y)
+        self.models_trained = True
+
     def calculate_risk_metrics(self, market_data, trade_size):
         latest_data = market_data.iloc[-1]
         avg_volume = market_data['volume'].mean()
