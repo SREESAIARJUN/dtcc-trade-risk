@@ -28,7 +28,7 @@ class AdvancedTradeRiskModel:
         self.models_trained = False
 
     def fetch_market_data(self, symbol, period='1mo', interval='1h'):
-        api_url = f'https://api.twelvedata.com/time_series?symbol={symbol}&interval={interval}&apikey=st.secrets['TWELVEDATA_API_KEY']'
+        api_url = f'https://api.twelvedata.com/time_series?symbol={symbol}&interval={interval}&apikey=st.secrets["TWELVEDATA_API_KEY"]'
         response = requests.get(api_url)
         data = response.json()
         if 'values' not in data:
