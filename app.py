@@ -13,7 +13,7 @@ import warnings
 warnings.filterwarnings('ignore')
 
 # -------------------------------------------------------------------------
-# Style Enhancements
+# UI Styles
 # -------------------------------------------------------------------------
 st.set_page_config(page_title='Advanced Trade Risk Analytics', layout='wide')
 st.markdown("""
@@ -23,6 +23,17 @@ st.markdown("""
     }
     .stTabs [data-baseweb="tab"] {
         font-size: 1.1rem;
+    }
+    .fixed-footer {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        background-color: white;
+        padding: 10px;
+        text-align: center;
+        font-size: 12px;
+        border-top: 1px solid #ddd;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -265,5 +276,4 @@ else:
 # -------------------------------------------------------------------------
 # Disclaimer
 # -------------------------------------------------------------------------
-st.caption("Disclaimer: This tool is for educational and informational purposes only and does not constitute financial advice. "+
-           "Always do your own research before making any investment or trading decisions.")
+st.markdown('<div class="fixed-footer">Disclaimer: This tool is for educational and informational purposes only and does not constitute financial advice. Always do your own research before making any investment or trading decisions.</div>', unsafe_allow_html=True)
